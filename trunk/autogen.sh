@@ -3,6 +3,6 @@
 set -x
 
 aclocal
-automake --foreign --missing --copy
+automake --foreign --add-missing --copy
 autoconf
 ./configure
