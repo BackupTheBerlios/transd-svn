@@ -1,0 +1,33 @@
+# Polzer/2004
+
+import os;
+
+env = Environment()
+
+CCFLAGS = '-O -Wall -Wuninitialized -Wunused -ggdb'
+LINKFLAGS = '-ggdb'
+
+sources = [Split("""transd.c
+	configfile.c
+	config_yacc.y
+	config_lex.l
+	slist.c""")]
+
+for d in ("/usr/X11R6", "/usr/X11", "/usr/openwin"):
+	if os.path.isdir (d):
+		libdir = os.path.join (d, "lib")
+		incdir = os.path.join (d, "include")
+		env.Append (LIBPATH = [libdir]) 
+		env.Append (CPPPATH = [incdir])
+		conf = Configure (env)
+		conf.env['X11'] = conf.CheckLibWithHeader ("X11", "X11/X.h", "C")
+		env = conf.Finish ()
+		if env['X11']:
+			break
+		env['LIBPATH'].remove(libdir)
+		env['CPPPATH'].remove(incdir)
+
+env['CCFLAGS'] = CCFLAGS;
+env['LINKFLAGS'] = LINKFLAGS;
+
+env.Program ( 'transd', sources )
