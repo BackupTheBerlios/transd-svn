@@ -9,6 +9,7 @@ HOME/.transd
 
 #include <X11/Xlib.h>
 #include <X11/Xatom.h>
+#include <X11/Xutil.h>
 
 #include <unistd.h>    /* getopt, exit */
 #include <stdlib.h>    /* getenv */
@@ -25,11 +26,58 @@ const unsigned int OPAQUE = 0xffffffff;
 
 slist* window_list = NULL;
 
+
+void walkWindowList ( void (*func) ( Window, void* ), void* data )
+{
+	slist* p = window_list;
+	
+	if ( p == NULL )
+	{
+		return;
+	}
+	
+	while ( p != NULL )
+	{
+		assert(p->data != NULL);
+		
+		DEBUG(10, "window# 0x%x\n", *(Window*)(p->data));
+		
+		func ( *(Window*)(p->data), data );
+		p = p->next;
+	}
+	
+	return;
+}
+
+
+void print_window_information ( Window w, void* data )
+{
+	char* name; XFetchName ( dp, w, &name );
+	
+	printf("\tWindow 0x%x / '%s'\n", w, name );
+	
+	return;
+}
+
+
 void SIGINT_handler ( int signum )
 {
 	printf("Exiting on SIGINT...\n");
 	exit(3);
 }
+
+
+void SIGHUP_handler ( int signum )
+{
+	printf("Window list contents:\n---------------------\n");
+	
+	walkWindowList ( print_window_information, NULL );
+	
+	printf("---------------------\n");
+	
+	return;
+}
+
 
 void setOpacity ( Window w, unsigned int opacity )
 {
@@ -81,10 +129,15 @@ void setOpacityRecursive ( Window w, unsigned int opacity )
 void selectInput ( Window w, void* data )
 {
 	XWMHints* wmhints = XGetWMHints(dp, w);
+	XWindowAttributes wattr;
 	
-	DEBUG(4, "w is 0x%x\n", w);
+	XGetWindowAttributes(dp, w, &wattr);
 	
-	if ( wmhints != NULL )
+	XSelectInput ( dp, w, VisibilityChangeMask );
+	
+	DEBUG(10, "w is 0x%x\n", w);
+	
+	if ( wmhints != NULL && wmhints->initial_state == 1 && wattr.map_state == 2)
 	{
 		Window* wp = (Window*)malloc(sizeof(Window));
 		*wp = w;
@@ -96,6 +149,8 @@ void selectInput ( Window w, void* data )
 		slist_add ( &window_list, wp );
 	}
 
+	XFree ( wmhints );
+	
 	return;
 }
 
@@ -145,7 +200,7 @@ void walkWindowTree ( Window w, void (*func) ( Window, void* ), void* data )
 }
 
 
-void walkWindowList ( void (*func) ( Window, void* ), void* data )
+void removeWindowFromList ( Window w )
 {
 	slist* p = window_list;
 	
@@ -160,7 +215,12 @@ void walkWindowList ( void (*func) ( Window, void* ), void* data )
 		
 		DEBUG(10, "window# 0x%x\n", *(Window*)(p->data));
 		
-		func ( *(Window*)(p->data), data );
+		if ( *(Window*)(p->data) == w )
+		{
+			if ( (p - 1) != NULL )
+				(p - 1)->next = p->next;
+		}
+		
 		p = p->next;
 	}
 	
@@ -271,6 +331,7 @@ int main ( int argc, char** argv )
 	char* name;
 
 	signal(SIGINT, SIGINT_handler);
+	signal(SIGHUP, SIGHUP_handler);
 	
 	parse_options ( argc, argv );
 	
@@ -286,7 +347,7 @@ int main ( int argc, char** argv )
 	DEBUG(1, "got %d initial windows in list\n", slist_size(window_list));
 	
 	/* select substructure events from root window (so we can keep track of new windows) */
-	XSelectInput ( dp, root, SubstructureNotifyMask );	
+	XSelectInput ( dp, root, SubstructureNotifyMask );
 
 
 	for (;;)
@@ -307,7 +368,17 @@ int main ( int argc, char** argv )
 				if ( rule != NULL )
 				{
 					DEBUG(5, "got rule for 0x%x\n", event.xcrossing.window);
-					walkWindowList ( executeRule, rule );
+					if ( !strcmp ( rule->action.property, "__TRANSD_SELF" ) )
+					{
+						Window dummy, parent, *children;
+						unsigned int n;
+						
+						XQueryTree ( dp, event.xcrossing.window, &dummy, &parent, &children, &n );
+						
+						setOpacity ( parent, rule->action.opacity );
+					}
+					else
+						walkWindowList ( executeRule, rule );
 				}
 				else
 				{
@@ -326,7 +397,17 @@ int main ( int argc, char** argv )
 					if ( rule != NULL )
 					{
 						DEBUG(5, "got rule for 0x%x\n", event.xcrossing.window);
-						walkWindowList ( executeRule, rule );
+						if ( !strcmp ( rule->action.property, "__TRANSD_SELF" ) )
+						{
+							Window dummy, parent, *children;
+							unsigned int n;
+							
+							XQueryTree ( dp, event.xcrossing.window, &dummy, &parent, &children, &n );
+							
+							setOpacity ( parent, rule->action.opacity );
+						}
+						else						
+							walkWindowList ( executeRule, rule );
 					}
 					else
 					{
@@ -334,6 +415,25 @@ int main ( int argc, char** argv )
 					}
 				}
 			break;
+				
+			case VisibilityNotify:
+				DEBUG(5, "VisibilityNotify for 0x%x (state %d)\n", event.xvisibility.window, event.xvisibility.state);
+				switch ( event.xvisibility.state )
+				{
+					case VisibilityFullyObscured:
+						DEBUG(5, "Removing 0x%x from our list\n", event.xvisibility.window);
+						removeWindowFromList ( event.xvisibility.window );
+						DEBUG(1, "got %d windows in list now\n", slist_size(window_list));
+					break;
+					
+					default:
+						DEBUG(5, "Adding 0x%x to our list\n", event.xvisibility.window);
+						selectInput( event.xvisibility.window, NULL );
+						DEBUG(1, "got %d windows in list now\n", slist_size(window_list));
+				}
+			break;
+				
+			/* hmm, what about DestroyNotify? Does this also generate VisibilityNotify with VisibilityFullyObscured...? */
 		}
 	}
 	

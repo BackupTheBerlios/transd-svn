@@ -1,5 +1,5 @@
 %{
-#include "y.tab.h"
+#include "config_yacc.h"
 
 extern unsigned int OPAQUE;
 
@@ -22,6 +22,7 @@ extern unsigned int OPAQUE;
 
 ON			return ON;
 SET			return SET;
+SELF			return SELF;
 TO			return TO;
 Alias			return ALIAS;
 Enter|Leave		yylval.s = strdup(yytext); return EVENT;

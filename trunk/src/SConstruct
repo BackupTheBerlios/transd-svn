@@ -29,5 +29,7 @@ for d in ("/usr/X11R6", "/usr/X11", "/usr/openwin"):
 
 env['CCFLAGS'] = CCFLAGS;
 env['LINKFLAGS'] = LINKFLAGS;
+env['YACCFLAGS'] = '-d'
+env['LEXFLAGS'] = '-d'
 
 env.Program ( 'transd', sources )
