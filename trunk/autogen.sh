@@ -3,7 +3,7 @@
 set -x
 
 aclocal
-automake --foreign --add-missing --copy
 autoheader
+automake --foreign --add-missing --copy
 autoconf
 ./configure
