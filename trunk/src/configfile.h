@@ -1,12 +1,18 @@
 #ifndef CONFIGFILE_H
 #define CONFIGFILE_H
 
+#include <X11/Xlib.h>
+#include <X11/Xatom.h>
+#include <X11/Xutil.h>
+
 #include "slist.h"
 
 
+#define DEBUG(level, ...) if (options.debug >= level) printf(__VA_ARGS__);
+
 struct transd_options
 {
-	unsigned int debug:1;
+	unsigned int debug;
 	char* config_file;
 };
 
@@ -52,6 +58,7 @@ void cfg_print_aliases();
 void cfg_print_rule ( void* data );
 void cfg_print_alias ( void* data );
 
-/* FIXME: cfg_get_rules */
+cfg_rule* cfg_get_rule ( Display*, Window, char* Event );
+int cfg_check_property ( Display*, Window, char* propery, char* value );
 
 #endif

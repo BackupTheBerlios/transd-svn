@@ -42,3 +42,23 @@ void slist_add ( slist** list, void* i )
 
 	return;
 }
+
+
+int slist_size ( slist* list )
+{
+	slist* p = list;
+	int s = 0;
+	
+	if ( p == NULL )
+	{
+		return(0);
+	}
+	
+	while ( p != NULL )
+	{
+		++s;
+		p = p->next;
+	}
+	
+	return(s);
+}

@@ -105,3 +105,65 @@ void cfg_print_alias ( void* data )
 	
 	return;
 }
+
+
+int cfg_check_property ( Display* d, Window w, char* property, char* value )
+{
+	Atom a;
+	int count;
+	char** strlist;
+	XTextProperty tp;
+	int i;
+	
+	char* name; XFetchName(d, w, &name);
+	
+	a = XInternAtom ( d, property, False );
+	
+	
+	if ( a == None )
+		return(1);
+	
+	XGetTextProperty ( d, w, &tp, a );
+	if ( tp.value == NULL )
+		return(1);
+
+	XTextPropertyToStringList ( &tp, &strlist, &count );
+
+	for ( i = count - 1; i ; --i )
+		if ( !strcmp ( strlist[i], value ) )
+			return(0);
+		
+	XFree ( strlist );
+
+	return(1);
+}
+
+
+cfg_rule* cfg_get_rule ( Display* d, Window w, char* event )
+{
+	slist* p = cfg_rules;
+	
+	if ( p == NULL )
+	{
+		return(NULL);
+	}
+	
+	while ( p != NULL )
+	{
+		assert(p->data != NULL);
+	
+		/* does the event condition match? */
+		if ( !strcmp ( ((cfg_rule*)p->data)->cond.event, event ) )
+		{
+			/* does the value condition match? */
+			if ( !cfg_check_property ( d, w, ((cfg_rule*)p->data)->cond.property,
+				((cfg_rule*)p->data)->cond.value ) )
+				return ( (cfg_rule*)p->data );
+
+		}
+		
+		next: p = p->next;
+	}
+	
+	return(NULL);
+}
