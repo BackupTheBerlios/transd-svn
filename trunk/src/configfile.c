@@ -1,55 +1,57 @@
 #include "configfile.h"
 
-const char* CFG_FILE = "transd.conf";
-
-extern FILE* yyin;
-extern void yyparse();
-
 static slist* cfg_aliases = NULL;
 static slist* cfg_rules = NULL;
 
+extern struct transd_options options;
 
 int cfg_parse_config_file ( char* path )
 {
+	extern FILE* yyin;
+	extern void yyparse();
+
+	const char* CFG_FILE = "transd.conf";
+	
 	char* filename = (char*) malloc ( strlen(CFG_FILE)
 		+ strlen(path) + 1 );
 	
 	sprintf ( filename, "%s/%s", path, CFG_FILE );
 	
-	//if ( debug-flag )
-	//{
+	if ( options.debug )
+	{
 		printf ( "Opening configuration file '%s'...\n", filename );
-	//}
+	}
 	
 	yyin = fopen ( filename, "r" );
 	
+	if ( yyin == NULL )
+		return(-1);
+	
 	yyparse();
 
-	//if ( debug-flag)
-	//{
+	if ( options.debug )
+	{
 		printf ( "Aliases list loaded:\n" );
 		cfg_print_aliases();
 
 		printf ( "Rules list loaded:\n" );
 		cfg_print_rules();
-	//}
+	}
 	
 	return(0);
 }
 
 
-void cfg_add_rule ( char* property, char* value,
-	char* event, unsigned int opacity )
+void cfg_add_rule ( cfg_rule* rule )
 {
-	cfg_rule* rule = malloc(sizeof(cfg_rule));
-	rule->property = property;
-	rule->value = value;
-	rule->event = event;
-	rule->opacity = opacity;
+	/* TODO: add aliases */
+	printf ( "Adding rule: ON %s ( %s %s %s ) SET ( %s %s %s ) TO %x\n",
+		rule->cond.event, rule->cond.property, rule->cond.comparison,
+		rule->cond.value, rule->action.property, rule->action.comparison,
+		rule->action.value, rule->action.opacity );	
 	
-	slist_add ( &cfg_rules, rule ); 
 	
-	return;
+	slist_add ( &cfg_rules, rule );
 }
 
 
@@ -57,8 +59,10 @@ void cfg_print_rule ( void* data )
 {
 	cfg_rule* rule = (cfg_rule*) data;
 	
-	printf ( "\t%s %s %s %x\n", rule->property, rule->value,
-		rule->event, rule->opacity );
+	printf ( "\tON %s ( %s %s %s ) SET ( %s %s %s ) TO %x\n",
+		rule->cond.event, rule->cond.property, rule->cond.comparison,
+		rule->cond.value, rule->action.property, rule->action.comparison,
+		rule->action.value, rule->action.opacity );
 	
 	return;
 }

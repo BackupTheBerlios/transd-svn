@@ -11,6 +11,18 @@ extern unsigned int OPAQUE;
 
 ^[ \t]*\n		/* empty line */++yylineno;
 ^#.*\n			/* comment */ ++yylineno;
+
+==			yylval.s = strdup("eq"); return EQUREL;
+!=			yylval.s = strdup("ne"); return EQUREL;
+
+\{			return OCURLY;
+\}			return CCURLY;
+\(			return OBRACE;
+\)			return CBRACE;
+
+ON			return ON;
+SET			return SET;
+TO			return TO;
 Alias			return ALIAS;
 Enter|Leave		yylval.s = strdup(yytext); return EVENT;
 [a-zA-Z_]+[a-zA-Z_0-9]	yylval.s = strdup(yytext); return STRING;

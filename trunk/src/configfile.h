@@ -3,18 +3,29 @@
 
 #include "slist.h"
 
-/*
- * rec. paths: /etc/transd ~/.transd
- */
 
-struct _cfg_rule_entry
+struct transd_options
+{
+	unsigned int debug:1;
+	char* config_file;
+};
+
+struct _cfg_base_rule
 {
 	char* property;
-	char* value;
+	char comparison[3]; /* eq / ne */
+	char* value;	
 	char* event;
 	unsigned int opacity;
 };
-typedef struct _cfg_rule_entry cfg_rule;
+typedef struct _cfg_base_rule cfg_base_rule;
+
+struct _cfg_rule
+{
+	cfg_base_rule cond;
+	cfg_base_rule action;
+};
+typedef struct _cfg_rule cfg_rule;
 
 struct _cfg_alias_entry
 {
@@ -30,8 +41,8 @@ void cfg_alias_add_entry ( cfg_alias* alias );
 /* reads the entries from config file */
 int cfg_parse_config_file ( char* path );
 
-/* these two are called by yacc */
-void cfg_add_rule ( char* property, char* value, char* event, unsigned int opacity );
+/* these are called by yacc */
+void cfg_add_rule ( cfg_rule* rule );
 void cfg_add_alias ( char* property, char* alias );
 
 /* debugging functions */

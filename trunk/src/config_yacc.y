@@ -7,21 +7,27 @@
 %token <s> ALIAS;
 %token <s> STRING;
 %token <s> EVENT;
+%token <s> EQUREL;
 %token <i> OPACITY;
-%token NEWLINE
+
+%token NEWLINE ON SET TO OBRACE CBRACE OCURLY CCURLY
 
 
 %{
 #include <stdio.h>
 #include <string.h>
 
-extern void cfg_add_rule ( char*, char*, char*, unsigned int );
+#include "configfile.h"
+
+extern void cfg_add_rule ( cfg_rule* );
 extern void cfg_add_alias ( char*, char* );
 extern unsigned int yylineno;
 
+cfg_rule* rule;
+
 void yyerror ( const char *str )
 {
-	fprintf ( stderr,"Error parsing config file in line %d\n", yylineno - 2 );
+	fprintf ( stderr,"Error parsing config file in line %d\n", yylineno );
 }
  
 int yywrap()
@@ -37,23 +43,55 @@ entries:
        | entries entry ;
 
 entry:
-	alias | simplerule
+	alias | rule ;
 
 alias:
 	ALIAS STRING STRING
 	{
-		cfg_add_alias ( $2, $3 )
+		cfg_add_alias ( $2, $3 );
 	}
 	;
 
-simplerule:
-	STRING STRING EVENT OPACITY
+rule: ON condition OCURLY action CCURLY
 	{
-		cfg_add_rule ( $1, $2, $3, $4 );
+		cfg_add_rule ( rule );
+	}
+    | ON condition simpleaction
+	{
+		cfg_add_rule ( rule );
 	}
 	;
 
-complexrule:
+condition:
+	EVENT OBRACE STRING EQUREL STRING CBRACE
+	{
+		rule = (cfg_rule*) malloc ( sizeof(cfg_rule) );
 	
+		rule->cond.event = $1;
+		rule->cond.property = $3;
+		sprintf ( rule->cond.comparison, "%2s", $4 );
+		rule->cond.value = $5;
+	}
+	;
+
+action:
+	SET OBRACE STRING EQUREL STRING CBRACE TO OPACITY
+	{
+		rule->action.property = $3;
+		sprintf ( rule->action.comparison, "%2s", $4 );
+		rule->action.value = $5;
+		rule->action.opacity = $8;
+	}
+	;
+	
+	
+simpleaction:
+	SET TO OPACITY
+	{
+		rule->action.property = rule->cond.property;
+		sprintf ( rule->action.comparison, "%2s", rule->cond.comparison );
+		rule->action.value = rule->cond.value;
+		rule->action.opacity = $3;
+	}
 
 %%
