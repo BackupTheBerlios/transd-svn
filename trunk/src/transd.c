@@ -1,11 +1,4 @@
 /* setOpacity() by Matthew Hawn */
-/* TODO: honor keyboard focus events! */
-
-/*
-config files:
-/etc/transd/transd.conf
-HOME/.transd
-*/
 
 #include <X11/Xlib.h>
 #include <X11/Xatom.h>
@@ -99,6 +92,32 @@ void setOpacity ( Window w, unsigned int opacity )
 }
 
 
+static unsigned int getOpacity ( Window w, unsigned int def )
+{
+    Atom actual;
+    int format;
+    unsigned long n, left;
+
+    unsigned char *data;
+	
+    int result = XGetWindowProperty ( dp, w,
+	XInternAtom ( dp, "_NET_WM_WINDOW_OPACITY", False ),
+	0L, 1L, False, XA_CARDINAL, &actual, &format, &n, &left, &data);
+
+	
+	
+    if ( result == Success && data != NULL )
+    {
+	unsigned int i;
+	memcpy ( &i, data, sizeof (unsigned int) );
+	XFree ( (void*) data );
+	return i;
+    }
+    
+    return(def);
+}
+
+
 void setOpacityRecursive ( Window w, unsigned int opacity )
 {
 	char* name;
@@ -147,6 +166,12 @@ void selectInput ( Window w, void* data )
 		DEBUG(4, "inserting window # 0x%x\n", *wp);
 		
 		slist_add ( &window_list, wp );
+	}
+	else if ( wattr.map_state == 2 )
+	{
+		XSelectInput ( dp, w, EnterWindowMask | LeaveWindowMask );
+	
+		DEBUG(4, "select isViewable window # 0x%x\n", w);		
 	}
 
 	XFree ( wmhints );
@@ -320,6 +345,9 @@ void parse_options ( int argc, char** argv )
 }
 
 
+cfg_rule* cached_rule;
+Window cached_window;
+
 int main ( int argc, char** argv )
 {
 	dp = XOpenDisplay ( NULL );
@@ -347,7 +375,7 @@ int main ( int argc, char** argv )
 	DEBUG(1, "got %d initial windows in list\n", slist_size(window_list));
 	
 	/* select substructure events from root window (so we can keep track of new windows) */
-	XSelectInput ( dp, root, SubstructureNotifyMask );
+	XSelectInput ( dp, root, SubstructureNotifyMask | EnterWindowMask );
 
 
 	for (;;)
@@ -363,6 +391,7 @@ int main ( int argc, char** argv )
 			
 			case EnterNotify:
 				DEBUG(5, "EnterNotify for 0x%x (detail %d)\n", event.xcrossing.window, event.xcrossing.detail);
+				
 				rule = cfg_get_rule ( dp, event.xcrossing.window, "Enter" );
 
 				if ( rule != NULL )
@@ -379,35 +408,82 @@ int main ( int argc, char** argv )
 					}
 					else
 						walkWindowList ( executeRule, rule );
+					
+					/* check whether this Enter-rule has reverted the cached Leave-rule */
+					if ( cached_rule != NULL )
+					{
+						Window dummy, parent, *children;
+						unsigned int n;
+
+						DEBUG(4, "SMART: A1. found cached rule for 0x%x\n", cached_window);
+						
+						XQueryTree ( dp, cached_window, &dummy, &parent, &children, &n );						
+						DEBUG(4, "Opacity matching: 0x%x == 0x%x ?\n", getOpacity(parent, 0),
+							rule->action.opacity );
+						if ( getOpacity(parent, 0) == rule->action.opacity )
+						{
+							DEBUG(4,"SMART: A2. opac matching\n");
+							if ( cfg_check_property ( dp, cached_window,
+								rule->action.property, rule->action.value ) )
+							{
+								DEBUG(4,"SMART: A3. rule was not reverted, executing...\n");
+								/* left window is not affected by this rule, execute cached rule */
+								if ( !strcmp ( cached_rule->action.property, "__TRANSD_SELF" ) )
+								{
+									setOpacity ( parent, cached_rule->action.opacity );
+								}
+								else					
+									walkWindowList ( executeRule, rule );
+								
+								cached_rule = NULL;
+							}
+						}
+					}
+						
+
 				}
-				else
+				else if ( event.xcrossing.detail != 4 )
 				{
+					
 					DEBUG(5, "no rule for 0x%x\n", event.xcrossing.window);
+					/* execute cached rule */
+					if ( cached_rule != NULL )
+					{
+						DEBUG(5, "SMART: B1. found cached rule for 0x%x\n", cached_window);
+						
+						if ( !strcmp ( cached_rule->action.property, "__TRANSD_SELF" ) )
+						{
+							Window dummy, parent, *children;
+							unsigned int n;
+							
+							XQueryTree ( dp, cached_window, &dummy, &parent, &children, &n );
+							
+							setOpacity ( parent, cached_rule->action.opacity );
+						}
+						else					
+							walkWindowList ( executeRule, cached_rule );					
+						
+						cached_rule = NULL;
+					}
 				}
 					
 			break;
 			
 			case LeaveNotify:
 				DEBUG(5, "LeaveNotify for 0x%x (detail %d)\n", event.xcrossing.window, event.xcrossing.detail);
-				if ( event.xcrossing.detail != 2)
+				if ( event.xcrossing.detail != 2 )
 				{
 					rule = cfg_get_rule ( dp, event.xcrossing.window, "Leave" );
 					
-
+					
 					if ( rule != NULL )
 					{
 						DEBUG(5, "got rule for 0x%x\n", event.xcrossing.window);
-						if ( !strcmp ( rule->action.property, "__TRANSD_SELF" ) )
-						{
-							Window dummy, parent, *children;
-							unsigned int n;
-							
-							XQueryTree ( dp, event.xcrossing.window, &dummy, &parent, &children, &n );
-							
-							setOpacity ( parent, rule->action.opacity );
-						}
-						else						
-							walkWindowList ( executeRule, rule );
+						
+						/* cache rule and current opacity */
+						DEBUG(5, "caching rule for 0x%x\n", event.xcrossing.window);
+						cached_rule = rule;
+						cached_window = event.xcrossing.window;
 					}
 					else
 					{
@@ -433,7 +509,11 @@ int main ( int argc, char** argv )
 				}
 			break;
 				
-			/* hmm, what about DestroyNotify? Does this also generate VisibilityNotify with VisibilityFullyObscured...? */
+			case DestroyNotify:
+				DEBUG(5, "DestroyNotify for 0x%x (state %d)\n", event.xdestroywindow.window);
+				DEBUG(5, "Removing 0x%x from our list\n", event.xdestroywindow.window);
+				removeWindowFromList ( event.xdestroywindow.window );
+			break;
 		}
 	}
 	
