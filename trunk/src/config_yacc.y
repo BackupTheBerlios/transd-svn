@@ -95,6 +95,8 @@ simpleaction: SET TO OPACITY
 	    | SET SELF TO OPACITY
 		{
 			rule->action.property = "__TRANSD_SELF";
+			sprintf ( rule->action.comparison, "%2s", rule->cond.comparison );
+			rule->action.value = "__TRANSD_SELF";
 			rule->action.opacity = $4;		
 		}
 	;

@@ -45,10 +45,10 @@ int cfg_parse_config_file ( char* path )
 void cfg_add_rule ( cfg_rule* rule )
 {
 	/* TODO: add aliases */
-	printf ( "Adding rule: ON %s ( %s %s %s ) SET ( %s %s %s ) TO %x\n",
+	/*printf ( "Adding rule: ON %s ( %s %s %s ) SET ( %s %s %s ) TO %x\n",
 		rule->cond.event, rule->cond.property, rule->cond.comparison,
 		rule->cond.value, rule->action.property, rule->action.comparison,
-		rule->action.value, rule->action.opacity );	
+		rule->action.value, rule->action.opacity );	*/
 	
 	
 	slist_add ( &cfg_rules, rule );

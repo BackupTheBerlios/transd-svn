@@ -1,8 +1,1 @@
-- extended syntax:
-	ON ENTER WM_CLASS=XMMS_Playlist SET (WMCLASS=XMMS) TO 0.5
-- listen for focusin, focusout, windowcreation
-- add copyright notices
-
-next version:
-- xcompmgr integration
-- option to save and restore transparency on leave/enter
+- add != operator

@@ -3,6 +3,7 @@
 #include <X11/Xlib.h>
 #include <X11/Xatom.h>
 #include <X11/Xutil.h>
+#include <X11/Xmu/Xmu.h>
 
 #include <unistd.h>    /* getopt, exit */
 #include <stdlib.h>    /* getenv */
@@ -257,7 +258,8 @@ void show_usage()
 {
 	printf
 	(
-		"Usage: transd [-dhLv] [-f <config-file>]"
+		/*"Usage: transd [-dhLv] [-f <config-file>]\n"*/
+		"Usage: transd [-dhLv]\n"
 	);
 	exit(2);
 }
@@ -304,7 +306,7 @@ void parse_options ( int argc, char** argv )
 	
 	char c;
 	
-	while ( (c = getopt ( argc, argv, ":Ld:hf:v" ) ) != -1 )
+	while ( (c = getopt ( argc, argv, ":Ld:hv" ) ) != -1 )
 	{
 		switch (c)
 		{
@@ -313,9 +315,9 @@ void parse_options ( int argc, char** argv )
 				options.debug = atoi(optarg);
 			break;
 			
-			case 'f':
+			/*case 'f':
 				options.config_file = strdup(optarg);
-			break;
+			break;*/
 			
 			case 'h':
 				show_usage();
@@ -363,11 +365,27 @@ int main ( int argc, char** argv )
 	
 	parse_options ( argc, argv );
 	
-	cfg_parse_config_file ( "../templates" );
-	/*if ( cfg_parse_config_file ( getenv(HOME)"" ) == -1 )
+	char* configfile = (char*) malloc ( strlen ( getenv("HOME") ) + strlen ("/.transd") + 1 );
+	
+	*configfile = '\0';
+	DEBUG(1, "configfile: %s\n", configfile );
+	DEBUG(1, "configfile: %s\n", configfile );
+	
+	if ( cfg_parse_config_file ( configfile ) == -1 )
 	{
-		cfg_parse_config_file() || return(1);
-	}*/
+		DEBUG(1, "User-based config-file %s/transd.conf not found!\n", configfile);
+		DEBUG(1, "Using global configuration file /etc/transd/transd.conf\n");
+		
+		if ( cfg_parse_config_file ( "/etc/transd" ) == -1 )
+		{
+			printf("Error: Could not find any config file! Exiting...\n");
+			return(1);
+		}
+	}
+	
+	free ( configfile );
+
+	XSetErrorHandler ( XmuSimpleErrorHandler );
 	
 	/* select window-enter/-leave events from all currently existing windows */
 	walkWindowTree ( root, selectInput, NULL );
