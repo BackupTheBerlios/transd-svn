@@ -1,5 +1,0 @@
-# Polzer/2005
-
-env = Environment()
-
-SConscript(['src/SConstruct'])
